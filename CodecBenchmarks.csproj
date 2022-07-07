@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
+  <ItemGroup>
+    <None Update="TestData\**\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Link>%(RecursiveDir)\%(Filename)%(Extension)</Link>
+      <Visible>True</Visible>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.13.1" />
+    <PackageReference Include="K4os.Compression.LZ4" Version="1.2.16" />
+    <PackageReference Include="PhotoSauce.MagicScaler" Version="0.13.0" />
+    <PackageReference Include="PhotoSauce.NativeCodecs.Libheif" Version="1.12.0-Preview2" />
+    <PackageReference Include="PhotoSauce.NativeCodecs.Libjxl" Version="0.6.1-Preview1" />
+  </ItemGroup>
+
+</Project>
