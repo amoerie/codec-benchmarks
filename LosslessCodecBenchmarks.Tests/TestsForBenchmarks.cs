@@ -1,4 +1,7 @@
-﻿using Xunit;
+﻿using PhotoSauce.MagicScaler;
+using PhotoSauce.NativeCodecs.Libheif;
+using PhotoSauce.NativeCodecs.Libjxl;
+using Xunit;
 
 namespace LosslessCodecBenchmarks.Tests;
 
@@ -25,6 +28,12 @@ public class TestsForBenchmarks
     public void EncodeDecodeShouldBeLossless(TestCase testCase)
     {
         // Arrange
+        CodecManager.Configure(codecs => {
+            codecs.UseLibheif();
+            codecs.UseLibjxl();
+            codecs.UseWicCodecs(WicCodecPolicy.Microsoft);
+        });
+        
         var benchmarks = new Benchmarks
         {
             File = testCase.File,

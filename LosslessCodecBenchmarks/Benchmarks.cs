@@ -124,7 +124,6 @@ public class Benchmarks
                 void ModifyEncoderSettings(ProcessImageSettings settings)
                 {
                     settings.TrySetEncoderFormat(ImageMimeTypes.Webp);
-                    
                 }
 
                 void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
