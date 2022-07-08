@@ -49,6 +49,8 @@ else
         Console.WriteLine("Encode finished successfully");
         benchmarks.Decode();
         Console.WriteLine("Decode finished successfully");
+        benchmarks.GlobalCleanup();
+        Console.WriteLine("GlobalCleanup finished successfully");
         
         Console.WriteLine("----------------------------------------------");
     }

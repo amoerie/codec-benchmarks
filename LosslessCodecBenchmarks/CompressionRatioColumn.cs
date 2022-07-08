@@ -14,7 +14,7 @@ public class CompressionRatioColumn : IColumn
     public string ColumnName => "Compression Ratio";
     public bool AlwaysShow => true;
     public ColumnCategory Category => ColumnCategory.Params;
-    public int PriorityInCategory => 3;
+    public int PriorityInCategory => 4;
     public bool IsNumeric => false;
     public UnitType UnitType => UnitType.Dimensionless;
     public string Legend => "Compression Ratio";

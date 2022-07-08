@@ -1,8 +1,12 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using BenchmarkDotNet.Attributes;
-using K4os.Compression.LZ4;
 using PhotoSauce.MagicScaler;
 using PhotoSauce.NativeCodecs.Libjxl;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Bmp;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Webp;
+using IImageEncoder = SixLabors.ImageSharp.Formats.IImageEncoder;
 
 namespace LosslessCodecBenchmarks;
 
@@ -16,18 +20,25 @@ public class Benchmarks
     private byte[]? _encoderOutput;
     private byte[]? _decoderInput;
     private byte[]? _decoderOutput;
+    private List<IDisposable>? _disposables;
 
-    [Params("MR", "CT", "CR" , Priority = 0)]
+    [Params("MagicScaler", "ImageSharp", Priority = 0)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
-    public string? File { get; set; }
+    public string? Library { get; set; }
+    
 
-    [Params("LZ4", "PNG", "WEBP", /*"HEIF", [ Heif does not seem to be working? ]*/ "JXL", "AVIF", Priority = 1)]
+    [Params("BMP", "PNG", "WEBP", "JXL", Priority = 1)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? Format { get; set; }
 
-    [Params("BestSpeed", "BestCompression", Priority = 2)]
+    [Params("MR", "CT", "CR", Priority = 2)]
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
+    [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
+    public string? File { get; set; }
+
+    [Params("BestSpeed", "BestCompression", Priority = 3)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? CompressionLevel { get; set; }
@@ -45,14 +56,14 @@ public class Benchmarks
     /// Will be populated with the raw decoded file size in BMP format
     /// </summary>
     public double OriginalFileSize { get; set; }
-    
+
     /// <summary>
     /// Will be populated with the encoded file size, depending on the current <see cref="Format"/>
     /// </summary>
     public double EncodedFileSize { get; set; }
 
-    public byte[] EncoderInput => _encoderInput!;
-    public byte[] DecoderOutput => _decoderOutput!;
+    public byte[]? EncoderInput => _encoderInput;
+    public byte[]? DecoderOutput => _decoderOutput;
 
     /// <summary>
     /// Global setup is run once for every combination of parameters
@@ -61,112 +72,169 @@ public class Benchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
+        _disposables = new List<IDisposable>();
+        switch (Library)
         {
-            var file = new FileInfo($"./TestData/{File}.png");
-            var decodeToRawSettings = GetDefaultDecoderSettings();
-            decodeToRawSettings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
-
-            using var fileMs = new MemoryStream();
-            MagicImageProcessor.ProcessImage(file.FullName, fileMs, decodeToRawSettings);
-            _encoderInput = fileMs.ToArray();
-            
-            if (ReportCompressionRatio)
+            case "MagicScaler":
             {
-                OriginalFileSize = _encoderInput.Length;
-            }
-        }
-
-        LZ4Level lz4CompressionLevel;
-        switch (CompressionLevel)
-        {
-            case "BestSpeed":
-                lz4CompressionLevel = LZ4Level.L00_FAST;
-                break;
-            case "BestCompression":
-                lz4CompressionLevel = LZ4Level.L12_MAX;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
-        }
-
-        _encoderOutput = new byte[_encoderInput.Length];
-        switch (Format)
-        {
-            case "LZ4":
-            {
-                var encodedLength = LZ4Codec.Encode(_encoderInput, _encoderOutput, lz4CompressionLevel);
-                Array.Resize(ref _encoderOutput, encodedLength);
-                
-                _decoderInput = new byte[encodedLength];
-                _decoderOutput = new byte[_encoderInput.Length];
-                Array.Copy(_encoderOutput, _decoderInput, encodedLength);
-                
-                _encode = () => LZ4Codec.Encode(_encoderInput, _encoderOutput, lz4CompressionLevel);
-                _decode = () => LZ4Codec.Decode(_decoderInput, _decoderOutput);
-
-                if (ReportCompressionRatio)
+                switch (Format)
                 {
-                    EncodedFileSize = encodedLength;
-                }
-            }
-                break;
-            case "PNG":
-            {
-                void ModifyEncoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Png);
-                void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
+                    case "BMP":
+                    {
+                        void ModifyEncoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
+                        void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
 
-                _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
-                _decode = DecodeWithMagicScaler(ModifyEncoderSettings, ModifyDecoderSettings);
-                break;
-            }
-            case "WEBP":
-            {
-                void ModifyEncoderSettings(ProcessImageSettings settings)
-                {
-                    settings.TrySetEncoderFormat(ImageMimeTypes.Webp);
-                }
+                        _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
+                        _decode = DecodeWithMagicScaler(ModifyEncoderSettings, ModifyDecoderSettings);
+                        break;
+                    }
+                    case "PNG":
+                    {
+                        void ModifyEncoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Png);
+                        void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
 
-                void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
+                        _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
+                        _decode = DecodeWithMagicScaler(ModifyEncoderSettings, ModifyDecoderSettings);
+                        break;
+                    }
+                    case "WEBP":
+                    {
+                        void ModifyEncoderSettings(ProcessImageSettings settings)
+                        {
+                            settings.TrySetEncoderFormat(ImageMimeTypes.Webp);
+                        }
 
-                _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
-                _decode = DecodeWithMagicScaler(ModifyEncoderSettings, ModifyDecoderSettings);
-                break;
-            }
-            case "HEIF":
-            {
-                void ModifyEncoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Heic);
-                void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
+                        void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
 
-                _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
-                _decode = DecodeWithMagicScaler(ModifyEncoderSettings, ModifyDecoderSettings);
-                break;
-            }
-            case "JXL":
-            {
-                void ModifyEncoderSettings(ProcessImageSettings settings)
-                {
-                    settings.TrySetEncoderFormat(ImageMimeTypes.Jxl);
-                    settings.EncoderOptions = new JxlLosslessEncoderOptions { EncodeSpeed = JxlEncodeSpeed.Cheetah };
+                        _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
+                        _decode = DecodeWithMagicScaler(ModifyEncoderSettings, ModifyDecoderSettings);
+                        break;
+                    }
+                    case "JXL":
+                    {
+                        JxlEncodeSpeed encodeSpeed;
+                        switch (CompressionLevel)
+                        {
+                            case "BestSpeed":
+                                encodeSpeed = JxlEncodeSpeed.Cheetah;
+                                break;
+                            case "BestCompression":
+                                encodeSpeed = JxlEncodeSpeed.Wombat;
+                                break;
+                            default:
+                                throw new ArgumentOutOfRangeException();
+                        }
+                        
+                        void ModifyEncoderSettings(ProcessImageSettings settings)
+                        {
+                            settings.TrySetEncoderFormat(ImageMimeTypes.Jxl);
+                            settings.EncoderOptions = new JxlLosslessEncoderOptions
+                            {
+                                EncodeSpeed = encodeSpeed,
+                                DecodeSpeed = JxlDecodeSpeed.Fastest
+                            };
+                        }
+
+                        void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
+
+                        _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
+                        _decode = DecodeWithMagicScaler(ModifyEncoderSettings, ModifyDecoderSettings);
+                        break;
+                    }
+                    default:
+                        throw new ArgumentOutOfRangeException();
                 }
 
-                void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
-
-                _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
-                _decode = DecodeWithMagicScaler(ModifyEncoderSettings, ModifyDecoderSettings);
                 break;
             }
-            case "AVIF":
+            case "ImageSharp":
             {
-                void ModifyEncoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Avif);
-                void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
-
-                _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
-                _decode = DecodeWithMagicScaler(ModifyEncoderSettings, ModifyDecoderSettings);
+                var rawEncoder = new BmpEncoder();
+                switch (Format)
+                {
+                    case "BMP":
+                    {
+                        var encoder = new BmpEncoder();
+                        _encode = EncodeWithImageSharp(encoder);
+                        _decode = DecodeWithImageSharp(encoder, rawEncoder);
+                        break;
+                    }
+                    case "PNG":
+                    {
+                        PngCompressionLevel compressionLevel;
+                        switch (CompressionLevel)
+                        {
+                            case "BestSpeed":
+                                compressionLevel = PngCompressionLevel.BestSpeed;
+                                break;
+                            case "BestCompression":
+                                compressionLevel = PngCompressionLevel.BestCompression;
+                                break;
+                            default:
+                                throw new ArgumentOutOfRangeException();
+                        }
+                        
+                        var encoder = new PngEncoder
+                        {
+                            CompressionLevel = compressionLevel
+                        };
+                        _encode = EncodeWithImageSharp(encoder);
+                        _decode = DecodeWithImageSharp(encoder, rawEncoder);
+                        break;
+                    }
+                    case "WEBP":
+                    {
+                        WebpEncodingMethod webpEncodingMethod;
+                        switch (CompressionLevel)
+                        {
+                            case "BestSpeed":
+                                webpEncodingMethod = WebpEncodingMethod.Fastest;
+                                break;
+                            case "BestCompression":
+                                webpEncodingMethod = WebpEncodingMethod.BestQuality;
+                                break;
+                            default:
+                                throw new ArgumentOutOfRangeException();
+                        }
+                        
+                        var encoder = new WebpEncoder
+                        {
+                            FileFormat = WebpFileFormatType.Lossless,
+                            Method = webpEncodingMethod
+                        };
+                        _encode = EncodeWithImageSharp(encoder);
+                        _decode = DecodeWithImageSharp(encoder, rawEncoder);
+                        break;
+                    }
+                    case "JXL":
+                    {
+                        // Not supported
+                        _encode = () => { };
+                        _decode = () => { };
+                        break;
+                    }
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
                 break;
             }
-            default:
-                throw new ArgumentOutOfRangeException();
         }
+    }
+
+    [GlobalCleanup]
+    public void GlobalCleanup()
+    {
+        if (_disposables == null)
+        {
+            return;
+        }
+        
+        foreach (var disposable in _disposables)
+        {
+            disposable.Dispose();
+        }
+
+        _disposables.Clear();
     }
 
     private ProcessImageSettings GetDefaultEncoderSettings()
@@ -181,14 +249,25 @@ public class Benchmarks
 
     private Action EncodeWithMagicScaler(Action<ProcessImageSettings> modifyEncoderSettings)
     {
+        // Prepare raw file in BMP format 
+        var file = new FileInfo($"./TestData/{File}.png");
+        var decodeToRawSettings = GetDefaultDecoderSettings();
+        decodeToRawSettings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
+        using var fileMs = new MemoryStream();
+        MagicImageProcessor.ProcessImage(file.FullName, fileMs, decodeToRawSettings);
+        _encoderInput = fileMs.ToArray();
+
+        if (ReportCompressionRatio)
+        {
+            OriginalFileSize = _encoderInput.Length;
+        }
         var encoderSettings = GetDefaultEncoderSettings();
         modifyEncoderSettings(encoderSettings);
 
         // Run the encoder once so that we know what the encoded length will be
         using var oneTimeOutputStream = new MemoryStream();
         MagicImageProcessor.ProcessImage(_encoderInput, oneTimeOutputStream, encoderSettings);
-        Array.Resize(ref _encoderOutput, (int)oneTimeOutputStream.Length);
-
+        _encoderOutput = new byte[oneTimeOutputStream.Length];
         if (ReportCompressionRatio)
         {
             EncodedFileSize = oneTimeOutputStream.Length;
@@ -205,11 +284,11 @@ public class Benchmarks
         Action<ProcessImageSettings> modifyEncoderSettings,
         Action<ProcessImageSettings> modifyDecoderSettings)
     {
-        var encoderSettings = GetDefaultEncoderSettings();  
+        var encoderSettings = GetDefaultEncoderSettings();
         var decoderSettings = GetDefaultDecoderSettings();
         modifyEncoderSettings(encoderSettings);
         modifyDecoderSettings(decoderSettings);
-        
+
         // Run the encoder once so we can use its output as the input for the decoding process
         using var decoderInputMs = new MemoryStream();
         MagicImageProcessor.ProcessImage(_encoderInput!, decoderInputMs, encoderSettings);
@@ -220,6 +299,57 @@ public class Benchmarks
         {
             using var decoderOutputStream = new MemoryStream(_decoderOutput, true);
             MagicImageProcessor.ProcessImage(_decoderInput, decoderOutputStream, decoderSettings);
+        };
+    }
+
+    private Action EncodeWithImageSharp(IImageEncoder encoder)
+    {
+        // Prepare raw file in BMP format 
+        var file = new FileInfo($"./TestData/{File}.png");
+        using var fileMs = new MemoryStream();
+        using var fileAsImage = Image.Load(file.FullName);
+        fileAsImage.SaveAsBmp(fileMs);
+        _encoderInput = fileMs.ToArray();
+
+        if (ReportCompressionRatio)
+        {
+            OriginalFileSize = _encoderInput.Length;
+        }
+        
+        // Run the encoder once so that we know what the encoded length will be
+        using var oneTimeOutputStream = new MemoryStream();
+        var image = Image.Load(_encoderInput);
+        image.Save(oneTimeOutputStream, encoder);
+        _encoderOutput = new byte[oneTimeOutputStream.Length];
+
+        if (ReportCompressionRatio)
+        {
+            EncodedFileSize = oneTimeOutputStream.Length;
+        }
+
+        _disposables?.Add(image);
+
+        return () =>
+        {
+            using var encoderOutputStream = new MemoryStream(_encoderOutput, true);
+            image.Save(encoderOutputStream, encoder);
+        };
+    }
+
+    private Action DecodeWithImageSharp(IImageEncoder encoder, IImageEncoder rawEncoder)
+    {
+        // Run the encoder once so we can use its output as the input for the decoding process
+        using var decoderInputMs = new MemoryStream();
+        using var image = Image.Load(_encoderInput);
+        image.Save(decoderInputMs, encoder);
+        _decoderInput = decoderInputMs.ToArray();
+        _decoderOutput = new byte[_encoderInput!.Length];
+
+        return () =>
+        {
+            using var decoderOutputStream = new MemoryStream(_decoderOutput, true);
+            using var decodedImage = Image.Load(_decoderInput);
+            decodedImage.Save(decoderOutputStream, rawEncoder);
         };
     }
 
