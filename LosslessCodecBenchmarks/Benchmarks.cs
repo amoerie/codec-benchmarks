@@ -33,7 +33,7 @@ public class Benchmarks
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? Format { get; set; }
 
-    [Params("MR", "CT", "CR", Priority = 2)]
+    [Params("MR", /*"CT"*/"CR", Priority = 2)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? File { get; set; }
@@ -81,7 +81,11 @@ public class Benchmarks
                 {
                     case "BMP":
                     {
-                        void ModifyEncoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
+                        void ModifyEncoderSettings(ProcessImageSettings settings)
+                        {
+                            settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
+                        }
+
                         void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
 
                         _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
@@ -90,7 +94,11 @@ public class Benchmarks
                     }
                     case "PNG":
                     {
-                        void ModifyEncoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Png);
+                        void ModifyEncoderSettings(ProcessImageSettings settings)
+                        {
+                            settings.TrySetEncoderFormat(ImageMimeTypes.Png);
+                        }
+
                         void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
 
                         _encode = EncodeWithMagicScaler(ModifyEncoderSettings);
