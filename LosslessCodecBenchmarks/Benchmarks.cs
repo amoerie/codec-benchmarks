@@ -2,6 +2,7 @@
 using BenchmarkDotNet.Attributes;
 using PhotoSauce.MagicScaler;
 using PhotoSauce.NativeCodecs.Libjxl;
+using PhotoSauce.NativeCodecs.Libwebp;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Formats.Png;
@@ -22,23 +23,23 @@ public class Benchmarks
     private byte[]? _decoderOutput;
     private List<IDisposable>? _disposables;
 
-    [Params("MagicScaler", "ImageSharp", Priority = 0)]
+    [Params("MagicScaler"/*, "ImageSharp"*/, Priority = 0)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? Library { get; set; }
     
 
-    [Params("BMP", "PNG", "WEBP", "JXL", Priority = 1)]
+    [Params("BMP", "PNG", "WEBP", /*"JXL",*/ Priority = 1)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? Format { get; set; }
 
-    [Params("MR", /*"CT"*/"CR", Priority = 2)]
+    [Params(/*"MR", CT"*/"CR", Priority = 2)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? File { get; set; }
 
-    [Params("BestSpeed", "BestCompression", Priority = 3)]
+    [Params("BestSpeed", "Balanced", "BestCompression", Priority = 3)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? CompressionLevel { get; set; }
@@ -110,6 +111,22 @@ public class Benchmarks
                         void ModifyEncoderSettings(ProcessImageSettings settings)
                         {
                             settings.TrySetEncoderFormat(ImageMimeTypes.Webp);
+
+                            switch (CompressionLevel)
+                            {
+                                case "BestSpeed":
+                                    settings.EncoderOptions = new WebpLosslessEncoderOptions(0);
+                                    break;
+                                case "Balanced":
+                                    settings.EncoderOptions = new WebpLosslessEncoderOptions(6);
+                                    break;
+                                case "BestCompression":
+                                    settings.EncoderOptions = new WebpLosslessEncoderOptions(9);
+                                    break;
+                                default:
+                                    throw new ArgumentOutOfRangeException();
+                            }
+
                         }
 
                         void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
@@ -125,6 +142,9 @@ public class Benchmarks
                         {
                             case "BestSpeed":
                                 encodeSpeed = JxlEncodeSpeed.Cheetah;
+                                break;
+                            case "Balanced":
+                                encodeSpeed = JxlEncodeSpeed.Squirrel;
                                 break;
                             case "BestCompression":
                                 encodeSpeed = JxlEncodeSpeed.Wombat;
@@ -175,6 +195,9 @@ public class Benchmarks
                             case "BestSpeed":
                                 compressionLevel = PngCompressionLevel.BestSpeed;
                                 break;
+                            case "Balanced":
+                                compressionLevel = PngCompressionLevel.DefaultCompression;
+                                break;
                             case "BestCompression":
                                 compressionLevel = PngCompressionLevel.BestCompression;
                                 break;
@@ -197,6 +220,9 @@ public class Benchmarks
                         {
                             case "BestSpeed":
                                 webpEncodingMethod = WebpEncodingMethod.Fastest;
+                                break;
+                            case "Balanced":
+                                webpEncodingMethod = WebpEncodingMethod.Default;
                                 break;
                             case "BestCompression":
                                 webpEncodingMethod = WebpEncodingMethod.BestQuality;

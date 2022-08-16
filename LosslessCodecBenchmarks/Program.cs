@@ -5,12 +5,12 @@ using BenchmarkDotNet.Running;
 using LosslessCodecBenchmarks;
 
 using PhotoSauce.MagicScaler;
-using PhotoSauce.NativeCodecs.Libheif;
 using PhotoSauce.NativeCodecs.Libjxl;
+using PhotoSauce.NativeCodecs.Libwebp;
 
 CodecManager.Configure(codecs => {
-    codecs.UseLibheif();
     codecs.UseLibjxl();
+    codecs.UseLibwebp();
     codecs.UseWicCodecs(WicCodecPolicy.Microsoft);
 });
 
