@@ -1,5 +1,7 @@
 ﻿using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
+using BenchmarkDotNet.Jobs;
+using BenchmarkDotNet.Toolchains.InProcess.Emit;
 
 namespace LosslessCodecBenchmarks;
 
@@ -8,7 +10,7 @@ public class BenchmarkConfig : ManualConfig
     public BenchmarkConfig()
     {
         AddDiagnoser(new MemoryDiagnoser(new MemoryDiagnoserConfig()));
-        AddJob(DefaultConfig.Instance.GetJobs().ToArray());
+        AddJob(Job.Default.WithToolchain(InProcessEmitToolchain.Instance));
         AddAnalyser(DefaultConfig.Instance.GetAnalysers().ToArray());
         AddExporter(DefaultConfig.Instance.GetExporters().ToArray());
         AddDiagnoser(DefaultConfig.Instance.GetDiagnosers().ToArray());
