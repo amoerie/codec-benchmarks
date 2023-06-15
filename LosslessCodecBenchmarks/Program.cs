@@ -46,9 +46,11 @@ else
         benchmarks.GlobalSetup();
         Console.WriteLine("GlobalSetup finished successfully");
         benchmarks.Encode();
+        
+        File.WriteAllBytes(@$"C:\Users\alexa\Downloads\jxl\{Guid.NewGuid()}.jxl", benchmarks.EncoderOutput!);
         Console.WriteLine("Encode finished successfully");
-        benchmarks.Decode();
-        Console.WriteLine("Decode finished successfully");
+        /*benchmarks.Decode();
+        Console.WriteLine("Decode finished successfully");*/
         benchmarks.GlobalCleanup();
         Console.WriteLine("GlobalCleanup finished successfully");
         

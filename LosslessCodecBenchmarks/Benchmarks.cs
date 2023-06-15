@@ -1,5 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Drawing;
 using BenchmarkDotNet.Attributes;
+using JxlSharp;
 using PhotoSauce.MagicScaler;
 using PhotoSauce.NativeCodecs.Libjxl;
 using PhotoSauce.NativeCodecs.Libwebp;
@@ -8,6 +10,7 @@ using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Webp;
 using IImageEncoder = SixLabors.ImageSharp.Formats.IImageEncoder;
+using Image = SixLabors.ImageSharp.Image;
 
 namespace LosslessCodecBenchmarks;
 
@@ -23,23 +26,23 @@ public class Benchmarks
     private byte[]? _decoderOutput;
     private List<IDisposable>? _disposables;
 
-    [Params("MagicScaler"/*, "ImageSharp"*/, Priority = 0)]
+    [Params(/*"MagicScaler", "ImageSharp",*/ "JxlSharp", Priority = 0)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? Library { get; set; }
     
 
-    [Params("BMP", "PNG", "WEBP", /*"JXL",*/ Priority = 1)]
+    [Params(/* "BMP", "PNG", "WEBP",*/ "JXL", Priority = 1)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? Format { get; set; }
 
-    [Params(/*"MR", CT"*/"CR", Priority = 2)]
+    [Params(/*"MR", */"CT","CR", Priority = 2)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? File { get; set; }
 
-    [Params("BestSpeed", "Balanced", "BestCompression", Priority = 3)]
+    [Params(/*"BestSpeed",*/ "Balanced"/*, "BestCompression"*/, Priority = 3)]
     [SuppressMessage("ReSharper", "MemberCanBePrivate.Global", Justification = "This is a Benchmark parameter")]
     [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global", Justification = "This is a Benchmark parameter")]
     public string? CompressionLevel { get; set; }
@@ -65,6 +68,8 @@ public class Benchmarks
 
     public byte[]? EncoderInput => _encoderInput;
     public byte[]? DecoderOutput => _decoderOutput;
+    public byte[]? EncoderOutput => _encoderOutput;
+    public byte[]? DecoderInput => _decoderInput;
 
     /// <summary>
     /// Global setup is run once for every combination of parameters
@@ -141,13 +146,13 @@ public class Benchmarks
                         switch (CompressionLevel)
                         {
                             case "BestSpeed":
-                                encodeSpeed = JxlEncodeSpeed.Cheetah;
+                                encodeSpeed = JxlEncodeSpeed.Lightning;
                                 break;
                             case "Balanced":
-                                encodeSpeed = JxlEncodeSpeed.Squirrel;
+                                encodeSpeed = JxlEncodeSpeed.Wombat;
                                 break;
                             case "BestCompression":
-                                encodeSpeed = JxlEncodeSpeed.Wombat;
+                                encodeSpeed = JxlEncodeSpeed.Tortoise;
                                 break;
                             default:
                                 throw new ArgumentOutOfRangeException();
@@ -207,7 +212,8 @@ public class Benchmarks
                         
                         var encoder = new PngEncoder
                         {
-                            CompressionLevel = compressionLevel
+                            CompressionLevel = compressionLevel,
+                            ColorType = PngColorType.Grayscale
                         };
                         _encode = EncodeWithImageSharp(encoder);
                         _decode = DecodeWithImageSharp(encoder, rawEncoder);
@@ -252,6 +258,74 @@ public class Benchmarks
                 }
                 break;
             }
+            case "JxlSharp":
+            {
+                switch (Format)
+                {
+                    case "BMP":
+                    {
+                        // Not supported
+                        _encode = () => { };
+                        _decode = () => { };
+                        break;
+                    }
+                    case "PNG":
+                    {
+                        // Not supported
+                        _encode = () => { };
+                        _decode = () => { };
+                        break;
+                    }
+                    case "WEBP":
+                    {
+                        // Not supported
+                        _encode = () => { };
+                        _decode = () => { };
+                        break;
+                    }
+                    case "JXL":
+                    {
+                        /*
+                        JxlEncodeSpeed encodeSpeed;
+                        switch (CompressionLevel)
+                        {
+                            case "BestSpeed":
+                                encodeSpeed = JxlEncodeSpeed.Lightning;
+                                break;
+                            case "Balanced":
+                                encodeSpeed = JxlEncodeSpeed.Wombat;
+                                break;
+                            case "BestCompression":
+                                encodeSpeed = JxlEncodeSpeed.Tortoise;
+                                break;
+                            default:
+                                throw new ArgumentOutOfRangeException();
+                        }
+                        
+                        void ModifyEncoderSettings(ProcessImageSettings settings)
+                        {
+                            settings.TrySetEncoderFormat(ImageMimeTypes.Jxl);
+                            settings.EncoderOptions = new JxlLosslessEncoderOptions
+                            {
+                                EncodeSpeed = encodeSpeed,
+                                DecodeSpeed = JxlDecodeSpeed.Fastest
+                            };
+                        }
+
+                        void ModifyDecoderSettings(ProcessImageSettings settings) => settings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
+                        */
+
+                        _encode = EncodeWithJxlSharp();
+                        _decode = () => { };
+                        break;
+                    }
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+
+                break;
+            }
+
         }
     }
 
@@ -386,6 +460,51 @@ public class Benchmarks
             decodedImage.Save(decoderOutputStream, rawEncoder);
         };
     }
+    
+    private Action EncodeWithJxlSharp()
+    {
+        // Prepare raw file in BMP format 
+        var file = new FileInfo($"./TestData/{File}.png");
+        var decodeToRawSettings = GetDefaultDecoderSettings();
+        decodeToRawSettings.TrySetEncoderFormat(ImageMimeTypes.Bmp);
+        using var fileMs = new MemoryStream();
+        MagicImageProcessor.ProcessImage(file.FullName, fileMs, decodeToRawSettings);
+        _encoderInput = fileMs.ToArray();
+
+        if (ReportCompressionRatio)
+        {
+            OriginalFileSize = _encoderInput.Length;
+        }
+
+        // Run the encoder once so that we know what the encoded length will be
+        using var oneTimeOutputStream = new MemoryStream();
+
+        fileMs.Seek(0, SeekOrigin.Begin);
+        
+        var bitmap = (Bitmap) System.Drawing.Image.FromFile(file.FullName);
+
+        _disposables!.Add(bitmap);
+        
+        var encoderSettings = new Dictionary<JxlEncoderFrameSettingId, long>
+        {
+            { JxlEncoderFrameSettingId.Effort, 6 }
+        };
+        JXL.EncodeJxl(bitmap, JxlLossyMode.Lossless, 0, encoderSettings, oneTimeOutputStream);
+        
+        _encoderOutput = new byte[oneTimeOutputStream.Length];
+        
+        if (ReportCompressionRatio)
+        {
+            EncodedFileSize = oneTimeOutputStream.Length;
+        }
+
+        return () =>
+        {
+            using var encoderOutputStream = new MemoryStream(_encoderOutput, true);
+            JXL.EncodeJxl(bitmap, JxlLossyMode.Lossless, 0, encoderSettings, encoderOutputStream);
+        };
+    }
+
 
     [Benchmark]
     public void Encode()
@@ -393,9 +512,9 @@ public class Benchmarks
         _encode?.Invoke();
     }
 
-    [Benchmark]
+    /*[Benchmark]
     public void Decode()
     {
         _decode?.Invoke();
-    }
+    }*/
 }

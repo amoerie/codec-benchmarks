@@ -9,9 +9,9 @@ public class TestsForBenchmarks
 {
     public record TestCase(string Library, string File, string Format, string CompressionLevel);
 
-    private static readonly string[] Libraries = { "MagicScaler", /*"ImageSharp"*/ };
+    private static readonly string[] Libraries = { "MagicScaler", "ImageSharp" };
     private static readonly string[] Files = { "MR", "CT", "CR" };
-    private static readonly string[] Formats = { "PNG", "WEBP"/*, "JXL"*/ };
+    private static readonly string[] Formats = { "PNG", "WEBP", "JXL" };
     private static readonly string[] CompressionSpeeds = { "BestSpeed", "Balanced", "BestCompression" };
 
     public static readonly TheoryData<TestCase> TestCases = new [] { Libraries, Files, Formats, CompressionSpeeds }
@@ -49,7 +49,7 @@ public class TestsForBenchmarks
         
         // Act
         benchmarks.GlobalSetup();
-        benchmarks.Decode();
+        //benchmarks.Decode();
         benchmarks.GlobalCleanup();
 
         // Assert
